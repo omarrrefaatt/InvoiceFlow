@@ -147,7 +147,7 @@ InvoiceFlow/
 
 1. **Clone** the repository
    ```bash
-   git clone https://github.com/<your-username>/InvoiceFlow.git
+   git clone https://github.com/omarrrefaatt/InvoiceFlow.git
    ```
 2. **Open** `project.json` in UiPath Studio.
 3. **Add invoices:** place your PDF files in `Data/Input/Invoices/`. This folder is git-ignored, so you supply your own files.
