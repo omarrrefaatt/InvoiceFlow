@@ -17,6 +17,7 @@
 [How it works](#-how-it-works) •
 [Project structure](#-project-structure) •
 [Getting started](#-getting-started) •
+[Configuration](#-configuration) •
 [Output](#-output) •
 [Roadmap](#-roadmap)
 
@@ -33,6 +34,7 @@
 | ✅ | **Rule-based validation** | Checks for missing fields, invalid or future dates and invalid totals, and collects **every** problem into one readable reason. |
 | 🗂️ | **Automatic routing** | Moves each PDF to `Accepted`, `Rejected` or `Errors` depending on the result. |
 | 📊 | **CSV reporting** | Appends one fully quoted, 13-column row per invoice to a report ready for Excel or BI tools. |
+| ⚙️ | **Config-driven** | Folder names and file names live in `Config/Config.csv`, not in the workflows. |
 | 🛡️ | **Fault isolation** | A Try/Catch around each invoice means one corrupt file never stops the batch. |
 | 🧮 | **Batch summary** | Logs processed, accepted, rejected and error counts, plus the accepted total, at the end of every run. |
 
@@ -42,8 +44,8 @@
 
 ```mermaid
 flowchart TD
-    A([▶ Main.xaml]) --> B[Initialize<br/>paths, folders, report header]
-    B --> C[Scan Input/Invoices for *.pdf]
+    A([▶ Main.xaml]) --> B[Initialize<br/>load config, folders, report header]
+    B --> C[Scan input folder for *.pdf]
     C --> D{{For each invoice}}
     D --> E[ProcessInvoice]
     E --> F[ExtractInvoice<br/>read PDF + regex]
@@ -61,7 +63,7 @@ flowchart TD
 | Workflow | Responsibility |
 |---|---|
 | `Main.xaml` | Entry point. Calls Initialize, loops over the PDFs, isolates failures with Try/Catch and calls GenerateSummary. |
-| `Initialize.xaml` | Builds all paths, creates missing folders, writes the CSV header and creates the history file. |
+| `Initialize.xaml` | Reads `Config/Config.csv`, builds all paths, creates missing folders, writes the CSV header and creates the history file. |
 | `ProcessInvoice.xaml` | Orchestrates the processing of a single invoice. Contains no business logic of its own. |
 | `ExtractInvoice.xaml` | Reads the PDF text and extracts the invoice fields with regular expressions. |
 | `CheckDuplicate.xaml` | Returns `True` if the invoice number already exists in `processed_invoices.txt`. |
@@ -107,19 +109,20 @@ InvoiceFlow/
 │   └── GenerateSummary.xaml
 │
 ├── Config/
-│   └── Config.xlsx              # Reserved for externalised settings (see roadmap)
+│   └── Config.csv               # Folder and file name settings
 │
-├── Data/
+├── data/
 │   ├── Input/
-│   │   └── Invoices/            # Drop PDF invoices here
-│   └── Output/
-│       ├── Accepted/            # Valid invoices
-│       ├── Rejected/            # Invalid or duplicate invoices
-│       ├── Errors/              # Files that crashed processing
-│       ├── invoice_report.csv   # Full report
-│       └── processed_invoices.txt   # Duplicate-check history
+│   │   ├── invoices.zip         # 12 sample invoices for testing
+│   │   └── Invoices/            # Extracted PDFs go here (git-ignored)
+│   └── Output/                  # Generated results (git-ignored)
+│       ├── Accepted/
+│       ├── Rejected/
+│       ├── Errors/
+│       ├── invoice_report.csv
+│       └── processed_invoices.txt
 │
-├── Logs/
+├── Logs/                        # Git-ignored
 ├── project.json
 └── project.uiproj
 ```
@@ -132,7 +135,9 @@ InvoiceFlow/
 - **UiPath.PDF.Activities**: PDF text reading
 - **UiPath.System.Activities**: file, folder and flow-control activities
 - **.NET regular expressions**: field extraction (`System.Text.RegularExpressions`)
-- **LINQ**: duplicate lookups and summary calculations
+- **LINQ**: config loading, duplicate lookups and summary calculations
+
+No Excel installation or Windows-only activities are required.
 
 ---
 
@@ -140,25 +145,51 @@ InvoiceFlow/
 
 ### Prerequisites
 
-- UiPath Studio (a cross-platform project, running on Windows, macOS or Linux)
+- UiPath Studio (cross-platform project, running on Windows, macOS or Linux)
 - The dependencies listed in `project.json` (Studio restores them automatically)
 
-### Run it
+### Run it with the sample invoices
 
 1. **Clone** the repository
    ```bash
-   git clone https://github.com/omarrrefaatt/InvoiceFlow.git
+   git clone https://github.com?omarrrefaatt/InvoiceFlow.git
+   cd InvoiceFlow
    ```
-2. **Open** `project.json` in UiPath Studio.
-3. **Add invoices:** place your PDF files in `Data/Input/Invoices/`. This folder is git-ignored, so you supply your own files.
-4. **Run** `Main.xaml` (Debug or Run).
-5. **Check the results** in `Data/Output/`.
+2. **Extract the sample invoices** into the input folder
+   ```bash
+   mkdir -p data/Input/Invoices
+   unzip -j data/Input/invoices.zip -x "__MACOSX/*" -d data/Input/Invoices
+   ```
+   Make sure the 12 PDFs sit **directly** inside `data/Input/Invoices/`, not in a nested sub-folder. (On Windows, extract the zip with File Explorer into that folder.)
+3. **Open** `project.json` in UiPath Studio.
+4. **Run** `Main.xaml`.
+5. **Check the results** in `data/Output/`.
 
 > The output folders, the CSV header and the history file are created automatically by `Initialize.xaml` on the first run.
 
-### Expected invoice layout
+### Expected result for the sample set
 
-The extractor looks for labelled lines in the PDF text:
+```text
+SUMMARY | Processed: 12 | Accepted: 11 | Rejected: 1 | Errors: 0 | Accepted total: 245,529.00 EGP
+```
+
+The one rejection is deliberate: `INV-2026-002.pdf` and `INV-2026-001.pdf` both contain the invoice number `INV-2026-001`, so the second one processed is caught as a duplicate.
+
+### Running it again
+
+Processed PDFs are **moved** out of the input folder, so to repeat a clean test:
+
+```bash
+rm -rf data/Output/Accepted/* data/Output/Rejected/* data/Output/Errors/*
+rm -f data/Output/invoice_report.csv data/Output/processed_invoices.txt
+unzip -j -o data/Input/invoices.zip -x "__MACOSX/*" -d data/Input/Invoices
+```
+
+This clears the previous results (including the duplicate history) and restores the sample PDFs.
+
+### Using your own invoices
+
+Place your PDFs in `data/Input/Invoices/`. The extractor looks for labelled lines in the PDF text:
 
 ```text
 INVOICE
@@ -175,6 +206,27 @@ Total 11,400.00
 ```
 
 Dates use the `dd/MM/yyyy` format. Other layouts need the patterns in `ExtractInvoice.xaml` adjusted.
+
+---
+
+## 🔧 Configuration
+
+Settings live in `Config/Config.csv`, a plain two-column file (`Name,Value`) that `Initialize.xaml` reads on startup. Paths are relative to the project root.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `InputFolder` | `data/Input/Invoices` | Folder scanned for invoices |
+| `OutputFolder` | `data/Output` | Root folder for all results |
+| `AcceptedFolder` | `Accepted` | Sub-folder for valid invoices |
+| `RejectedFolder` | `Rejected` | Sub-folder for invalid or duplicate invoices |
+| `ErrorsFolder` | `Errors` | Sub-folder for files that crashed processing |
+| `CsvFileName` | `invoice_report.csv` | Report file name |
+| `HistoryFileName` | `processed_invoices.txt` | Duplicate-check history |
+| `InvoiceFilePattern` | `*.pdf` | Reserved: not yet applied by the workflows |
+| `DateFormat` | `dd/MM/yyyy` | Reserved: not yet applied by the workflows |
+
+> Folder names are case-sensitive on Linux, so keep the config values identical to the folder names on disk.
+> Never store passwords or keys in this file. Use Orchestrator assets or environment variables.
 
 ---
 
@@ -223,7 +275,9 @@ SUMMARY | Processed: 12 | Accepted: 11 | Rejected: 1 | Errors: 0 | Accepted tota
 - [x] End-to-end pipeline: extract, check duplicates, validate, save, summarise
 - [x] CSV reporting with a 13-column schema
 - [x] Per-invoice error isolation
-- [ ] Read folder paths and settings from `Config/Config.xlsx`
+- [x] Folder and file names loaded from `Config/Config.csv`
+- [x] Sample invoices included for quick testing
+- [x] Apply `InvoiceFilePattern` and `DateFormat` from the config
 - [ ] Optional rule: flag VAT rates that differ from the standard 14%
 - [ ] Unit tests for extraction and validation (UiPath.Testing)
 - [ ] Orchestrator deployment with a queue-based dispatcher/performer split
@@ -233,8 +287,9 @@ SUMMARY | Processed: 12 | Accepted: 11 | Rejected: 1 | Errors: 0 | Accepted tota
 
 ## 🔒 Notes
 
-- `Data/Output/`, `Data/Input/Invoices/` and `Logs/` are excluded via `.gitignore`, because they contain generated data and local file paths.
-- Never store credentials in `Config.xlsx`. Use Orchestrator assets or environment variables.
+- `data/Output/`, `data/Input/Invoices/`, `Logs/`, `.local/` and `.settings/` are excluded via `.gitignore`, because they contain generated data, local file paths or machine-specific files.
+- The sample archive `data/Input/invoices.zip` is tracked on purpose, so anyone can reproduce the results above.
+- The invoices in the archive are dummy test documents.
 
 ---
 
