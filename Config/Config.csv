@@ -1,0 +1,10 @@
+Name,Value
+InputFolder,data/Input/Invoices
+OutputFolder,data/Output
+AcceptedFolder,Accepted
+RejectedFolder,Rejected
+ErrorsFolder,Errors
+CsvFileName,invoice_report.csv
+HistoryFileName,processed_invoices.txt
+InvoiceFilePattern,*.pdf
+DateFormat,dd/MM/yyyy

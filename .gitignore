@@ -1,2 +1,11 @@
 Logs/
 .DS_Store
+
+# Generated data
+data/Output/
+data/Input/Invoices/
+Logs/
+
+# UiPath local files
+.local/
+.settings/
