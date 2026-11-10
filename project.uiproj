@@ -1,0 +1,6 @@
+{
+  "Name": "InvoiceFlow",
+  "ProjectType": "Process",
+  "Description": "An end-to-end RPA solution that automates invoice ingestion, PDF data extraction, business validation, duplicate detection, registration, exception handling, and reporting.",
+  "MainFile": "Main.xaml"
+}
